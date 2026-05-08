@@ -1,0 +1,6 @@
+{
+  "name": "Vibra AI",
+  "description": "The Neural Nexus. A hyper-advanced conversational intelligence featuring multi-agent synthesis, secure cloud synchronization, and elite reasoning architectures.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": []
+}

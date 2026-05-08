@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // --- User Profiles ---
+    function isValidUser(data) {
+      return data.email is string && data.email.size() <= 256 &&
+             (data.get('displayName', '') is string && data.get('displayName', '').size() <= 128) &&
+             (data.get('photoURL', '') is string && data.get('photoURL', '').size() <= 512) &&
+             (data.get('createdAt', '') is string);
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      // We allow creation upon first login, we check isVerified for writing profile data
+      allow create: if isOwner(userId) && isVerified() && isValidUser(incoming()) && incoming().keys().hasAll(['email']);
+      allow update: if isOwner(userId) && isVerified() && isValidUser(incoming()) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL']);
+    }
+
+    // --- User Settings ---
+    function isValidUserSettings(data) {
+      return (data.get('systemPrompt', '') is string && data.get('systemPrompt', '').size() <= 2000) &&
+             data.isIncognito is bool &&
+             data.responseStyle in ['concise', 'balanced', 'creative'] &&
+             data.subscription in ['free', 'pro', 'ultra'] &&
+             data.brainComplexity in ['standard', 'advanced', 'agi', 'deepseek'] &&
+             (data.get('memory', []) is list && data.get('memory', []).size() <= 100) &&
+             (data.get('activePersonaId', '') is string && data.get('activePersonaId', '').size() <= 100);
+    }
+
+    match /users/{userId}/config/settings {
+      allow get: if isOwner(userId);
+      allow write: if isOwner(userId) && isVerified() && isValidUserSettings(incoming());
+    }
+
+    // --- Chat Sessions ---
+    function isValidSession(data) {
+      return data.title is string && data.title.size() <= 256 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.createdAt is number &&
+             data.updatedAt is number &&
+             (data.get('isPinned', false) is bool);
+    }
+
+    match /users/{userId}/sessions/{sessionId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isVerified() && isValidId(sessionId) && isValidSession(incoming()) && 
+                    incoming().keys().hasAll(['title', 'userId', 'createdAt', 'updatedAt']) &&
+                    incoming().keys().size() >= 4 && incoming().keys().size() <= 6;
+      allow update: if isOwner(userId) && isVerified() && isValidSession(incoming()) && (
+        // Action: Pin/Unpin or Rename or General Update
+        incoming().diff(existing()).affectedKeys().hasAny(['isPinned', 'title', 'updatedAt']) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isPinned', 'title', 'updatedAt'])
+      ) && incoming().userId == existing().userId;
+      allow delete: if isOwner(userId) && isVerified();
+    }
+
+    // --- Messages ---
+    function isValidMessage(data) {
+      return data.role is string && (data.role == 'user' || data.role == 'assistant') &&
+             data.content is string && data.content.size() <= 60000 &&
+             data.timestamp is number &&
+             (data.get('attachments', []) is list && data.get('attachments', []).size() <= 10);
+    }
+
+    match /users/{userId}/sessions/{sessionId}/messages/{messageId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isVerified() && isValidId(sessionId) && isValidId(messageId) && 
+                    isValidMessage(incoming()) && 
+                    exists(/databases/$(database)/documents/users/$(userId)/sessions/$(sessionId)) &&
+                    incoming().keys().hasAll(['role', 'content', 'timestamp']) &&
+                    incoming().keys().size() >= 3 && incoming().keys().size() <= 5;
+      allow update: if isOwner(userId) && isVerified() && isValidMessage(incoming()) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['content', 'timestamp']);
+      allow delete: if isOwner(userId) && isVerified();
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email"]
+    },
+    "Session": {
+      "title": "Chat Session",
+      "description": "A conversation thread",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "isPinned": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "userId": { "type": "string" }
+      },
+      "required": ["title", "userId", "createdAt", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A single message in a conversation",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "attachments": { "type": "array" }
+      },
+      "required": ["role", "content", "timestamp"]
+    },
+    "UserSettings": {
+      "title": "User Settings",
+      "description": "Preferences and long-term memory",
+      "type": "object",
+      "properties": {
+        "systemPrompt": { "type": "string" },
+        "isIncognito": { "type": "boolean" },
+        "responseStyle": { "type": "string", "enum": ["concise", "balanced", "creative"] },
+        "subscription": { "type": "string", "enum": ["free", "pro", "ultra"] },
+        "brainComplexity": { "type": "string", "enum": ["standard", "advanced", "agi", "deepseek"] },
+        "memory": { "type": "array", "items": { "type": "string" } },
+        "activePersonaId": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/users/{userId}/config/settings": {
+      "schema": "UserSettings",
+      "description": "User's persistent settings and memory"
+    },
+    "/users/{userId}/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Chat sessions for a user"
+    },
+    "/users/{userId}/sessions/{sessionId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Individual messages within a session"
+    }
+  }
+}
